@@ -42,4 +42,27 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-client.login(process.env.DISCORD_TOKEN);
+// Railway health-check server
+const http = require('http');
+
+const port = process.env.PORT || 3000;
+
+http.createServer((req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/plain'
+  });
+
+  res.end('Server Control Bot is running');
+}).listen(port, '0.0.0.0', () => {
+  console.log(`🌐 Healthcheck server listening on port ${port}`);
+});
+
+// Start Discord bot
+client.login(process.env.DISCORD_TOKEN)
+  .then(() => {
+    console.log('🤖 Discord login successful.');
+  })
+  .catch((err) => {
+    console.error('❌ Discord login failed:', err);
+    process.exit(1);
+  });
