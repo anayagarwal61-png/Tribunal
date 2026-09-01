@@ -18,7 +18,7 @@ for (const file of fs.readdirSync(commandsPath).filter(f => f.endsWith('.js'))) 
   client.commands.set(command.data.name, command);
 }
 
-client.once('ready', () => {
+client.once('clientReady', () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
   console.log(`Owner override active for user ID: ${process.env.OWNER_ID}`);
 });
