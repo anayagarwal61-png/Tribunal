@@ -1,0 +1,15 @@
+{
+  "name": "discord-mod-bot",
+  "version": "1.0.0",
+  "description": "Custom moderation bot with owner-override permissions, respecting Discord's role hierarchy.",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "deploy": "node deploy-commands.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5"
+  }
+}
