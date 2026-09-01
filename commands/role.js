@@ -1,6 +1,7 @@
 const {
   SlashCommandBuilder,
   PermissionFlagsBits,
+  PermissionsBitField,
 } = require('discord.js');
 
 const permissionMap = {
@@ -25,19 +26,11 @@ const permissionMap = {
   speak: PermissionFlagsBits.Speak,
 };
 
-const permissionChoices = Object.keys(permissionMap).map(name => ({
-  name,
-  value: name,
-}));
-
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('role')
     .setDescription('Manage server roles')
 
-    // -------------------------------------------------------
-    // CREATE
-    // -------------------------------------------------------
     .addSubcommand(sub =>
       sub
         .setName('create')
@@ -50,9 +43,6 @@ module.exports = {
         )
     )
 
-    // -------------------------------------------------------
-    // DELETE
-    // -------------------------------------------------------
     .addSubcommand(sub =>
       sub
         .setName('delete')
@@ -65,9 +55,6 @@ module.exports = {
         )
     )
 
-    // -------------------------------------------------------
-    // RENAME
-    // -------------------------------------------------------
     .addSubcommand(sub =>
       sub
         .setName('rename')
@@ -86,9 +73,6 @@ module.exports = {
         )
     )
 
-    // -------------------------------------------------------
-    // GIVE
-    // -------------------------------------------------------
     .addSubcommand(sub =>
       sub
         .setName('give')
@@ -107,9 +91,6 @@ module.exports = {
         )
     )
 
-    // -------------------------------------------------------
-    // REMOVE
-    // -------------------------------------------------------
     .addSubcommand(sub =>
       sub
         .setName('remove')
@@ -128,9 +109,6 @@ module.exports = {
         )
     )
 
-    // -------------------------------------------------------
-    // PERMISSIONS
-    // -------------------------------------------------------
     .addSubcommand(sub =>
       sub
         .setName('permissions')
@@ -146,7 +124,12 @@ module.exports = {
             .setName('permission')
             .setDescription('Permission to change')
             .setRequired(true)
-            .addChoices(...permissionChoices)
+            .addChoices(
+              ...Object.keys(permissionMap).map(name => ({
+                name,
+                value: name,
+              }))
+            )
         )
         .addBooleanOption(option =>
           option
@@ -157,18 +140,11 @@ module.exports = {
     ),
 
   async execute(interaction) {
-
-    // =======================================================
-    // OWNER OVERRIDE
-    // =======================================================
-
     const ownerId = process.env.OWNER_ID;
 
     const isOwner =
-      ownerId &&
-      interaction.user.id === ownerId;
+      ownerId && interaction.user.id === ownerId;
 
-    // Server administrators can also use the command.
     const isAdministrator =
       interaction.memberPermissions?.has(
         PermissionFlagsBits.Administrator
@@ -176,59 +152,56 @@ module.exports = {
 
     if (!isOwner && !isAdministrator) {
       return interaction.reply({
-        content:
-          '❌ You do not have permission to use this command.',
+        content: '❌ You do not have permission to use this command.',
         ephemeral: true,
       });
     }
 
-    const subcommand =
-      interaction.options.getSubcommand();
+    const subcommand = interaction.options.getSubcommand();
 
-    // =======================================================
+    const botMember = interaction.guild.members.me;
+
+    if (!botMember) {
+      return interaction.reply({
+        content: '❌ I could not find my server member.',
+        ephemeral: true,
+      });
+    }
+
+    // -------------------------------------------------------
     // CREATE
-    // =======================================================
+    // -------------------------------------------------------
 
     if (subcommand === 'create') {
-
-      const name =
-        interaction.options.getString('name');
+      const name = interaction.options.getString('name');
 
       try {
-
-        const role =
-          await interaction.guild.roles.create({
-            name,
-            reason:
-              `Created by ${interaction.user.tag}`,
-          });
-
-        return interaction.reply({
-          content:
-            `✅ Created role ${role}.`,
-          ephemeral: true,
+        const role = await interaction.guild.roles.create({
+          name,
+          reason: `Created by ${interaction.user.tag}`,
         });
 
+        return interaction.reply({
+          content: `✅ Created ${role}.`,
+          ephemeral: true,
+        });
       } catch (error) {
-
         console.error(error);
 
         return interaction.reply({
           content:
-            '❌ I could not create that role. Check my Manage Roles permission.',
+            '❌ Could not create the role. Make sure Tribunal has Manage Roles.',
           ephemeral: true,
         });
       }
     }
 
-    // =======================================================
+    // -------------------------------------------------------
     // DELETE
-    // =======================================================
+    // -------------------------------------------------------
 
     if (subcommand === 'delete') {
-
-      const role =
-        interaction.options.getRole('role');
+      const role = interaction.options.getRole('role');
 
       if (!role) {
         return interaction.reply({
@@ -239,213 +212,196 @@ module.exports = {
 
       if (role.managed) {
         return interaction.reply({
-          content:
-            '❌ That is a managed/integration role and cannot be deleted.',
+          content: '❌ Managed roles cannot be deleted.',
           ephemeral: true,
         });
       }
 
-      if (
-        role.position >=
-        interaction.guild.members.me.roles.highest.position
-      ) {
+      if (role.position >= botMember.roles.highest.position) {
         return interaction.reply({
           content:
-            '❌ That role is above my highest role. Discord will not let me modify it.',
+            '❌ I cannot modify that role because it is above my highest role.',
           ephemeral: true,
         });
       }
 
       try {
+        const roleName = role.name;
 
         await role.delete(
           `Deleted by ${interaction.user.tag}`
         );
 
         return interaction.reply({
-          content:
-            `✅ Deleted **${role.name}**.`,
+          content: `✅ Deleted **${roleName}**.`,
           ephemeral: true,
         });
-
       } catch (error) {
-
         console.error(error);
 
         return interaction.reply({
-          content:
-            '❌ I could not delete that role.',
+          content: '❌ Could not delete that role.',
           ephemeral: true,
         });
       }
     }
 
-    // =======================================================
+    // -------------------------------------------------------
     // RENAME
-    // =======================================================
+    // -------------------------------------------------------
 
     if (subcommand === 'rename') {
+      const role = interaction.options.getRole('role');
+      const name = interaction.options.getString('name');
 
-      const role =
-        interaction.options.getRole('role');
+      if (!role) {
+        return interaction.reply({
+          content: '❌ Role not found.',
+          ephemeral: true,
+        });
+      }
 
-      const name =
-        interaction.options.getString('name');
+      if (role.managed) {
+        return interaction.reply({
+          content: '❌ Managed roles cannot be renamed.',
+          ephemeral: true,
+        });
+      }
 
-      if (
-        role.position >=
-        interaction.guild.members.me.roles.highest.position
-      ) {
+      if (role.position >= botMember.roles.highest.position) {
         return interaction.reply({
           content:
-            '❌ That role is above my highest role.',
+            '❌ I cannot modify that role because it is above my highest role.',
           ephemeral: true,
         });
       }
 
       try {
-
         await role.setName(
           name,
           `Renamed by ${interaction.user.tag}`
         );
 
         return interaction.reply({
-          content:
-            `✅ Role renamed to **${name}**.`,
+          content: `✅ Role renamed to **${name}**.`,
           ephemeral: true,
         });
-
       } catch (error) {
-
         console.error(error);
 
         return interaction.reply({
-          content:
-            '❌ I could not rename that role.',
+          content: '❌ Could not rename that role.',
           ephemeral: true,
         });
       }
     }
 
-    // =======================================================
+    // -------------------------------------------------------
     // GIVE
-    // =======================================================
+    // -------------------------------------------------------
 
     if (subcommand === 'give') {
-
-      const user =
+      const member =
         interaction.options.getMember('user');
 
       const role =
         interaction.options.getRole('role');
 
-      if (!user || !role) {
+      if (!member || !role) {
         return interaction.reply({
-          content:
-            '❌ User or role not found.',
+          content: '❌ Member or role not found.',
           ephemeral: true,
         });
       }
 
-      if (
-        role.position >=
-        interaction.guild.members.me.roles.highest.position
-      ) {
+      if (role.managed) {
+        return interaction.reply({
+          content: '❌ Managed roles cannot be assigned manually.',
+          ephemeral: true,
+        });
+      }
+
+      if (role.position >= botMember.roles.highest.position) {
         return interaction.reply({
           content:
-            '❌ That role is above my highest role.',
+            '❌ I cannot assign that role because it is above my highest role.',
           ephemeral: true,
         });
       }
 
       try {
-
-        await user.roles.add(
+        await member.roles.add(
           role,
           `Given by ${interaction.user.tag}`
         );
 
         return interaction.reply({
-          content:
-            `✅ Gave ${role} to ${user}.`,
+          content: `✅ Gave ${role} to ${member}.`,
           ephemeral: true,
         });
-
       } catch (error) {
-
         console.error(error);
 
         return interaction.reply({
           content:
-            '❌ I could not give that role.',
+            '❌ Could not give that role. Make sure Tribunal has Manage Roles.',
           ephemeral: true,
         });
       }
     }
 
-    // =======================================================
+    // -------------------------------------------------------
     // REMOVE
-    // =======================================================
+    // -------------------------------------------------------
 
     if (subcommand === 'remove') {
-
-      const user =
+      const member =
         interaction.options.getMember('user');
 
       const role =
         interaction.options.getRole('role');
 
-      if (!user || !role) {
+      if (!member || !role) {
         return interaction.reply({
-          content:
-            '❌ User or role not found.',
+          content: '❌ Member or role not found.',
           ephemeral: true,
         });
       }
 
-      if (
-        role.position >=
-        interaction.guild.members.me.roles.highest.position
-      ) {
+      if (role.position >= botMember.roles.highest.position) {
         return interaction.reply({
           content:
-            '❌ That role is above my highest role.',
+            '❌ I cannot remove that role because it is above my highest role.',
           ephemeral: true,
         });
       }
 
       try {
-
-        await user.roles.remove(
+        await member.roles.remove(
           role,
           `Removed by ${interaction.user.tag}`
         );
 
         return interaction.reply({
-          content:
-            `✅ Removed ${role} from ${user}.`,
+          content: `✅ Removed ${role} from ${member}.`,
           ephemeral: true,
         });
-
       } catch (error) {
-
         console.error(error);
 
         return interaction.reply({
           content:
-            '❌ I could not remove that role.',
+            '❌ Could not remove that role. Make sure Tribunal has Manage Roles.',
           ephemeral: true,
         });
       }
     }
 
-    // =======================================================
+    // -------------------------------------------------------
     // PERMISSIONS
-    // =======================================================
+    // -------------------------------------------------------
 
     if (subcommand === 'permissions') {
-
       const role =
         interaction.options.getRole('role');
 
@@ -457,8 +413,7 @@ module.exports = {
 
       if (!role) {
         return interaction.reply({
-          content:
-            '❌ Role not found.',
+          content: '❌ Role not found.',
           ephemeral: true,
         });
       }
@@ -466,29 +421,15 @@ module.exports = {
       if (role.managed) {
         return interaction.reply({
           content:
-            '❌ Managed/integration roles cannot be edited.',
+            '❌ Managed/integration roles cannot have their permissions changed.',
           ephemeral: true,
         });
       }
 
-      const botMember =
-        interaction.guild.members.me;
-
-      if (!botMember) {
+      if (role.position >= botMember.roles.highest.position) {
         return interaction.reply({
           content:
-            '❌ I could not determine my server role.',
-          ephemeral: true,
-        });
-      }
-
-      if (
-        role.position >=
-        botMember.roles.highest.position
-      ) {
-        return interaction.reply({
-          content:
-            '❌ That role is above my highest role. Discord prevents me from editing it.',
+            '❌ That role is above Tribunal's highest role.',
           ephemeral: true,
         });
       }
@@ -498,18 +439,14 @@ module.exports = {
 
       if (!permission) {
         return interaction.reply({
-          content:
-            '❌ Unknown permission.',
+          content: '❌ Unknown permission.',
           ephemeral: true,
         });
       }
 
       try {
-
         const permissions =
-          new PermissionsBitField(
-            role.permissions
-          );
+          new PermissionsBitField(role.permissions);
 
         if (enabled) {
           permissions.add(permission);
@@ -529,14 +466,12 @@ module.exports = {
             }** for ${role}.`,
           ephemeral: true,
         });
-
       } catch (error) {
-
         console.error(error);
 
         return interaction.reply({
           content:
-            '❌ I could not change that role's permissions. Make sure Tribunal has **Manage Roles**.',
+            '❌ Could not change the role permissions. Make sure Tribunal has Manage Roles.',
           ephemeral: true,
         });
       }
